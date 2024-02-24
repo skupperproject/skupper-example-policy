@@ -1,0 +1,60 @@
+title: Skupper Hello World
+subtitle: A minimal HTTP application deployed across Kubernetes clusters using Skupper
+overview: |
+  This example is a very simple multi-service HTTP application
+  deployed across Kubernetes clusters using Skupper.
+
+  It contains two services:
+
+  * A backend service that exposes an `/api/hello` endpoint.  It
+    returns greetings of the form `Hi, <your-name>.  I am <my-name>
+    (<pod-name>)`.
+
+  * A frontend service that sends greetings to the backend and
+    fetches new greetings in response.
+
+  With Skupper, you can place the backend in one cluster and the
+  frontend in another and maintain connectivity between the two
+  services without exposing the backend to the public internet.
+
+  <img src="images/entities.svg" width="640"/>
+sites:
+  west:
+    title: West
+    platform: kubernetes
+    namespace: west
+    env:
+      KUBECONFIG: ~/.kube/config-west
+  east:
+    title: East
+    platform: kubernetes
+    namespace: east
+    env:
+      KUBECONFIG: ~/.kube/config-east
+steps:
+  - standard: general/install_the_skupper_command_line_tool
+  - standard: kubernetes/set_up_your_namespaces
+  - standard: hello_world/deploy_the_frontend_and_backend
+  - standard: kubernetes/create_your_sites
+  - standard: kubernetes/link_your_sites
+  - standard: hello_world/expose_the_backend
+  - standard: hello_world/access_the_frontend
+  - standard: hello_world/cleaning_up
+summary: |
+  This example locates the frontend and backend services in different
+  namespaces, on different clusters.  Ordinarily, this means that they
+  have no way to communicate unless they are exposed to the public
+  internet.
+
+  Introducing Skupper into each namespace allows us to create a virtual
+  application network that can connect services in different clusters.
+  Any service exposed on the application network is represented as a
+  local service in all of the linked namespaces.
+
+  The backend service is located in `east`, but the frontend service
+  in `west` can "see" it as if it were local.  When the frontend
+  sends a request to the backend, Skupper forwards the request to the
+  namespace where the backend is running and routes the response back to
+  the frontend.
+
+  <img src="images/sequence.svg" width="640"/>
