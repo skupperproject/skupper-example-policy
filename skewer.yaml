@@ -36,7 +36,111 @@ steps:
   - standard: kubernetes/set_up_your_namespaces
   - standard: hello_world/deploy_the_frontend_and_backend
   - standard: kubernetes/create_your_sites
+  - title: Enable policy controls
+    commands:
+      west:
+        - run: kubectl apply -f https://raw.githubusercontent.com/skupperproject/skupper/main/api/types/crds/skupper_cluster_policy_crd.yaml
+      east:
+        - run: kubectl apply -f https://raw.githubusercontent.com/skupperproject/skupper/main/api/types/crds/skupper_cluster_policy_crd.yaml
+  - title: Policy stuff for site linking
+    preamble: |
+      With the empty policy installed, token creation fails:
+
+      ~~~ console
+      $ skupper token create /run/user/1000/skewer/secret.token
+      Error: Failed to create token: Policy validation error: incoming links are not allowed
+      ~~~
+
+      We need to allow incoming links:
+
+      ~~~ yaml
+      spec:
+        namespaces:
+          - "west"
+        allowIncomingLinks: true
+      ~~~
+
+      Now link creation fails:
+
+      ~~~ console
+      $ skupper link create /run/user/1000/skewer/secret.token
+      Error: Failed to create link: outgoing link to 10.100.227.215 is not allowed
+      ~~~
+
+      We need to allow outgoing links:
+
+      ~~~ yaml
+      spec:
+        namespaces:
+          - "east"
+        allowedOutgoingLinksHostnames:
+          - "*"
+      ~~~
+    commands:
+      west:
+        - run: |
+            cat <<EOF | kubectl apply -f -
+            apiVersion: skupper.io/v1alpha1
+            kind: SkupperClusterPolicy
+            metadata:
+              name: west
+            spec:
+              namespaces:
+                - "west"
+              allowIncomingLinks: true
+            EOF
+      east:
+        - run: |
+            cat <<EOF | kubectl apply -f -
+            apiVersion: skupper.io/v1alpha1
+            kind: SkupperClusterPolicy
+            metadata:
+              name: east
+            spec:
+              namespaces:
+                - "east"
+              allowedOutgoingLinksHostnames:
+                - "*"
+            EOF
   - standard: kubernetes/link_your_sites
+  - title: Policy stuff for service exposure
+    preamble: |
+      Without policy allowance:
+
+      ~~~ console
+      $ skupper expose deployment/backend --port 8080
+      Error: Policy validation error: deployment/backend cannot be exposed
+      ~~~
+
+      This is what we need:
+
+      ~~~ yaml
+      spec:
+        namespaces:
+          - "east"
+        allowedExposedResources:
+          - "deployment/backend"
+        allowedServices:
+          - "backend"
+      ~~~
+    commands:
+      east:
+        - run: |
+            cat <<EOF | kubectl apply -f -
+            apiVersion: skupper.io/v1alpha1
+            kind: SkupperClusterPolicy
+            metadata:
+              name: east
+            spec:
+              namespaces:
+                - "east"
+              allowedOutgoingLinksHostnames:
+                - "*"
+              allowedExposedResources:
+                - "deployment/backend"
+              allowedServices:
+                - "backend"
+            EOF
   - standard: hello_world/expose_the_backend
   - standard: hello_world/access_the_frontend
   - standard: hello_world/cleaning_up
