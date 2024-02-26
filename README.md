@@ -1,10 +1,10 @@
 <!-- NOTE: This file is generated from skewer.yaml.  Do not edit it directly. -->
 
-# Skupper Hello World
+# Skupper Hello World using cluster policy
 
 [![main](https://github.com/ssorj/skupper-example-policy/actions/workflows/main.yaml/badge.svg)](https://github.com/ssorj/skupper-example-policy/actions/workflows/main.yaml)
 
-#### A minimal HTTP application deployed across Kubernetes clusters using Skupper
+#### Use policy to control site linking and service exposure
 
 This example is part of a [suite of examples][examples] showing the
 different ways you can use [Skupper][website] to connect services
@@ -15,22 +15,43 @@ across cloud providers, data centers, and edge sites.
 
 #### Contents
 
+* [Overview](#overview)
 * [Prerequisites](#prerequisites)
 * [Step 1: Install the Skupper command-line tool](#step-1-install-the-skupper-command-line-tool)
-* [Step 2: Set up your namespaces](#step-2-set-up-your-namespaces)
-* [Step 3: Deploy the frontend and backend](#step-3-deploy-the-frontend-and-backend)
-* [Step 4: Enable policy enforcement](#step-4-enable-policy-enforcement)
+* [Step 2: Set up your clusters](#step-2-set-up-your-clusters)
+* [Step 3: Enable Skupper cluster policy](#step-3-enable-skupper-cluster-policy)
+* [Step 4: Deploy the frontend and backend](#step-4-deploy-the-frontend-and-backend)
 * [Step 5: Create your sites](#step-5-create-your-sites)
-* [Step 6: Attempt to link your sites without permission](#step-6-attempt-to-link-your-sites-without-permission)
-* [Step 7: Attempt to expose the backend without permission](#step-7-attempt-to-expose-the-backend-without-permission)
-* [Step 8: Grant permission to link your sites and expose the backend](#step-8-grant-permission-to-link-your-sites-and-expose-the-backend)
-* [Step 9: Link your sites](#step-9-link-your-sites)
-* [Step 10: Expose the backend](#step-10-expose-the-backend)
-* [Step 11: Access the frontend](#step-11-access-the-frontend)
+* [Step 6: Attempt to link your sites and expose the backend](#step-6-attempt-to-link-your-sites-and-expose-the-backend)
+* [Step 7: Grant permission to link your sites and expose the backend](#step-7-grant-permission-to-link-your-sites-and-expose-the-backend)
+* [Step 8: Link your sites and expose the backend](#step-8-link-your-sites-and-expose-the-backend)
+* [Step 9: Access the frontend](#step-9-access-the-frontend)
 * [Cleaning up](#cleaning-up)
 * [Summary](#summary)
 * [Next steps](#next-steps)
 * [About this example](#about-this-example)
+
+## Overview
+
+This example is a variant of [Skupper Hello World][hello-world] that
+uses [Skupper cluster policy][policy] to restrict site linking and
+service exposure.
+
+It contains two services:
+
+* A backend service that exposes an `/api/hello` endpoint.  It
+  returns greetings of the form `Hi, <your-name>.  I am <my-name>
+  (<pod-name>)`.
+
+* A frontend service that sends greetings to the backend and
+  fetches new greetings in response.
+
+The frontend and backend run in different sites, on different
+clusters.  The example shows you how you can explicitly allow
+linking of the two sites and exposure of the backend service.
+
+[hello-world]: https://github.com/skupperproject/skupper-example-hello-world
+[policy]: https://skupper.io/docs/policy/index.html
 
 ## Prerequisites
 
@@ -65,12 +86,12 @@ Skupper][install-docs].
 [install-script]: https://github.com/skupperproject/skupper-website/blob/main/input/install.sh
 [install-docs]: https://skupper.io/install/
 
-## Step 2: Set up your namespaces
+## Step 2: Set up your clusters
 
-Skupper is designed for use with multiple Kubernetes namespaces,
-usually on different clusters.  The `skupper` and `kubectl`
-commands use your [kubeconfig][kubeconfig] and current context to
-select the namespace where they operate.
+Skupper is designed for use with multiple Kubernetes clusters.
+The `skupper` and `kubectl` commands use your
+[kubeconfig][kubeconfig] and current context to select the cluster
+and namespace where they operate.
 
 [kubeconfig]: https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/
 
@@ -115,7 +136,52 @@ kubectl create namespace east
 kubectl config set-context --current --namespace east
 ~~~
 
-## Step 3: Deploy the frontend and backend
+## Step 3: Enable Skupper cluster policy
+
+To enable Skupper cluster policy, you install a Custom Resource
+Definition (CRD) named `SkupperClusterPolicy`.  Installing the
+CRD requires cluster admin privileges.
+
+The presence of the CRD in a cluster tells Skupper to enforce
+cluster policy.
+
+_**Warning:**_ Once the CRD is installed, any existing Skupper
+networks on the cluster will stop working because Skupper
+cluster policy denies all operations not explicitly allowed in
+the policy configuration.  Be careful to define working policy
+rules before you enable policy for existing networks.
+
+Use `kubectl apply` to install the CRD in each cluster.
+
+_**West:**_
+
+~~~ shell
+kubectl apply -f https://raw.githubusercontent.com/skupperproject/skupper/main/api/types/crds/skupper_cluster_policy_crd.yaml
+~~~
+
+_Sample output:_
+
+~~~ console
+$ kubectl apply -f https://raw.githubusercontent.com/skupperproject/skupper/main/api/types/crds/skupper_cluster_policy_crd.yaml
+customresourcedefinition.apiextensions.k8s.io/skupperclusterpolicies.skupper.io created
+clusterrole.rbac.authorization.k8s.io/skupper-service-controller created
+~~~
+
+_**East:**_
+
+~~~ shell
+kubectl apply -f https://raw.githubusercontent.com/skupperproject/skupper/main/api/types/crds/skupper_cluster_policy_crd.yaml
+~~~
+
+_Sample output:_
+
+~~~ console
+$ kubectl apply -f https://raw.githubusercontent.com/skupperproject/skupper/main/api/types/crds/skupper_cluster_policy_crd.yaml
+customresourcedefinition.apiextensions.k8s.io/skupperclusterpolicies.skupper.io created
+clusterrole.rbac.authorization.k8s.io/skupper-service-controller created
+~~~
+
+## Step 4: Deploy the frontend and backend
 
 This example runs the frontend and the backend in separate
 Kubernetes namespaces, on different clusters.
@@ -134,20 +200,6 @@ _**East:**_
 
 ~~~ shell
 kubectl create deployment backend --image quay.io/skupper/hello-world-backend --replicas 3
-~~~
-
-## Step 4: Enable policy enforcement
-
-_**West:**_
-
-~~~ shell
-kubectl apply -f https://raw.githubusercontent.com/skupperproject/skupper/main/api/types/crds/skupper_cluster_policy_crd.yaml
-~~~
-
-_**East:**_
-
-~~~ shell
-kubectl apply -f https://raw.githubusercontent.com/skupperproject/skupper/main/api/types/crds/skupper_cluster_policy_crd.yaml
 ~~~
 
 ## Step 5: Create your sites
@@ -207,7 +259,16 @@ Skupper is enabled for namespace "east". It is not connected to any other sites.
 As you move through the steps below, you can use `skupper status` at
 any time to check your progress.
 
-## Step 6: Attempt to link your sites without permission
+## Step 6: Attempt to link your sites and expose the backend
+
+Let's first try to link our sites and expose the backend service
+without permission.
+
+Use `skupper token create` in West to generate the token.  This
+is the first step in attempting to link the two sites.
+
+Use `skupper expose` to attempt to expose the backend service in
+East.
 
 _**West:**_
 
@@ -222,8 +283,6 @@ $ skupper token create ~/secret.token
 Error: Failed to create token: Policy validation error: incoming links are not allowed
 ~~~
 
-## Step 7: Attempt to expose the backend without permission
-
 _**East:**_
 
 ~~~ shell
@@ -237,7 +296,10 @@ $ skupper expose deployment/backend --port 8080
 Error: Policy validation error: deployment/backend cannot be exposed
 ~~~
 
-## Step 8: Grant permission to link your sites and expose the backend
+Because Skupper cluster policy is enabled, these operations are
+denied.
+
+## Step 7: Grant permission to link your sites and expose the backend
 
 ~~~ yaml
 apiVersion: skupper.io/v1alpha1
@@ -274,28 +336,15 @@ _**East:**_
 kubectl apply -f east/policy.yaml
 ~~~
 
-## Step 9: Link your sites
+## Step 8: Link your sites and expose the backend
 
-A Skupper _link_ is a channel for communication between two sites.
-Links serve as a transport for application connections and
-requests.
+Now that we have permission granted, let's try again.
 
-Creating a link requires use of two `skupper` commands in
-conjunction, `skupper token create` and `skupper link create`.
+Use `skupper token create` in West to generate the token.  Then,
+use `skupper link create` in East to link the sites.
 
-The `skupper token create` command generates a secret token that
-signifies permission to create a link.  The token also carries the
-link details.  Then, in a remote site, The `skupper link
-create` command uses the token to create a link to the site
-that generated it.
-
-**Note:** The link token is truly a *secret*.  Anyone who has the
-token can link to your site.  Make sure that only those you trust
-have access to it.
-
-First, use `skupper token create` in site West to generate the
-token.  Then, use `skupper link create` in site East to link
-the sites.
+Use `skupper expose` to expose the backend service in East to
+the frontend in West.
 
 _**West:**_
 
@@ -314,45 +363,21 @@ _**East:**_
 
 ~~~ shell
 skupper link create ~/secret.token
-~~~
-
-_Sample output:_
-
-~~~ console
-$ skupper link create ~/secret.token
-Site configured to link to https://10.105.193.154:8081/ed9c37f6-d78a-11ec-a8c7-04421a4c5042 (name=link1)
-Check the status of the link using 'skupper link status'.
-~~~
-
-If your terminal sessions are on different machines, you may need
-to use `scp` or a similar tool to transfer the token securely.  By
-default, tokens expire after a single use or 15 minutes after
-creation.
-
-## Step 10: Expose the backend
-
-We now have our sites linked to form a Skupper network, but no
-services are exposed on it.  Skupper uses the `skupper expose`
-command to select a service from one site for exposure in all the
-linked sites.
-
-Use `skupper expose` to expose the backend service in East to
-the frontend in West.
-
-_**East:**_
-
-~~~ shell
 skupper expose deployment/backend --port 8080
 ~~~
 
 _Sample output:_
 
 ~~~ console
+$ skupper link create ~/secret.token
+Site configured to link to <endpoint> (name=link1)
+Check the status of the link using 'skupper link status'.
+
 $ skupper expose deployment/backend --port 8080
 deployment backend exposed as backend
 ~~~
 
-## Step 11: Access the frontend
+## Step 9: Access the frontend
 
 In order to use and test the application, we need external access
 to the frontend.
@@ -406,6 +431,7 @@ _**West:**_
 skupper delete
 kubectl delete service/frontend
 kubectl delete deployment/frontend
+kubectl delete -f west/policy.yaml
 ~~~
 
 _**East:**_
@@ -413,6 +439,7 @@ _**East:**_
 ~~~ shell
 skupper delete
 kubectl delete deployment/backend
+kubectl delete -f east/policy.yaml
 ~~~
 
 ## Next steps
