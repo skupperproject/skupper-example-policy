@@ -2,7 +2,7 @@
 
 # Skupper Hello World using cluster policy
 
-[![main](https://github.com/ssorj/skupper-example-policy/actions/workflows/main.yaml/badge.svg)](https://github.com/ssorj/skupper-example-policy/actions/workflows/main.yaml)
+[![main](https://github.com/skupperproject/skupper-example-policy/actions/workflows/main.yaml/badge.svg)](https://github.com/skupperproject/skupper-example-policy/actions/workflows/main.yaml)
 
 #### Use policy to control site linking and service exposure
 
