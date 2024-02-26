@@ -1,0 +1,9 @@
+apiVersion: skupper.io/v1alpha1
+kind: SkupperClusterPolicy
+metadata:
+  name: east
+spec:
+  namespaces: [east]
+  allowedOutgoingLinksHostnames: ["*"]
+  allowedExposedResources: [deployment/backend]
+  allowedServices: [backend]

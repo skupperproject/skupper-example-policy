@@ -1,0 +1,8 @@
+apiVersion: skupper.io/v1alpha1
+kind: SkupperClusterPolicy
+metadata:
+  name: west
+spec:
+  namespaces: [west]
+  allowIncomingLinks: true
+  allowedServices: [backend]

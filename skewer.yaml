@@ -1,23 +1,21 @@
 title: Skupper Hello World
 subtitle: A minimal HTTP application deployed across Kubernetes clusters using Skupper
-overview: |
-  This example is a very simple multi-service HTTP application
-  deployed across Kubernetes clusters using Skupper.
+# overview: |
+#   This example is a very simple multi-service HTTP application
+#   deployed across Kubernetes clusters using Skupper.
 
-  It contains two services:
+#   It contains two services:
 
-  * A backend service that exposes an `/api/hello` endpoint.  It
-    returns greetings of the form `Hi, <your-name>.  I am <my-name>
-    (<pod-name>)`.
+#   * A backend service that exposes an `/api/hello` endpoint.  It
+#     returns greetings of the form `Hi, <your-name>.  I am <my-name>
+#     (<pod-name>)`.
 
-  * A frontend service that sends greetings to the backend and
-    fetches new greetings in response.
+#   * A frontend service that sends greetings to the backend and
+#     fetches new greetings in response.
 
-  With Skupper, you can place the backend in one cluster and the
-  frontend in another and maintain connectivity between the two
-  services without exposing the backend to the public internet.
-
-  <img src="images/entities.svg" width="640"/>
+#   With Skupper, you can place the backend in one cluster and the
+#   frontend in another and maintain connectivity between the two
+#   services without exposing the backend to the public internet.
 sites:
   west:
     title: West
@@ -35,130 +33,61 @@ steps:
   - standard: general/install_the_skupper_command_line_tool
   - standard: kubernetes/set_up_your_namespaces
   - standard: hello_world/deploy_the_frontend_and_backend
+  - title: Enable policy enforcement
+    commands:
+      west:
+        - run: kubectl apply -f https://raw.githubusercontent.com/skupperproject/skupper/main/api/types/crds/skupper_cluster_policy_crd.yaml
+      east:
+        - run: kubectl apply -f https://raw.githubusercontent.com/skupperproject/skupper/main/api/types/crds/skupper_cluster_policy_crd.yaml
   - standard: kubernetes/create_your_sites
-  - title: Enable policy controls
+  - title: Attempt to link your sites without permission
     commands:
       west:
-        - run: kubectl apply -f https://raw.githubusercontent.com/skupperproject/skupper/main/api/types/crds/skupper_cluster_policy_crd.yaml
+        - run: skupper token create ~/secret.token
+          apply: readme
+          output: "Error: Failed to create token: Policy validation error: incoming links are not allowed"
+        - run: "skupper token create ~/secret.token || :"
+          apply: test
+  - title: Attempt to expose the backend without permission
+    commands:
       east:
-        - run: kubectl apply -f https://raw.githubusercontent.com/skupperproject/skupper/main/api/types/crds/skupper_cluster_policy_crd.yaml
-  - title: Policy stuff for site linking
+        - run: skupper expose deployment/backend --port 8080
+          apply: readme
+          output: "Error: Policy validation error: deployment/backend cannot be exposed"
+        - run: "skupper expose deployment/backend --port 8080 || :"
+          apply: test
+  - title: Grant permission to link your sites and expose the backend
     preamble: |
-      With the empty policy installed, token creation fails:
-
-      ~~~ console
-      $ skupper token create /run/user/1000/skewer/secret.token
-      Error: Failed to create token: Policy validation error: incoming links are not allowed
-      ~~~
-
-      We need to allow incoming links:
-
       ~~~ yaml
+      apiVersion: skupper.io/v1alpha1
+      kind: SkupperClusterPolicy
+      metadata:
+        name: west
       spec:
-        namespaces:
-          - "west"
+        namespaces: [west]
         allowIncomingLinks: true
+        allowedServices: [backend]
       ~~~
-
-      Now link creation fails:
-
-      ~~~ console
-      $ skupper link create /run/user/1000/skewer/secret.token
-      Error: Failed to create link: outgoing link to 10.100.227.215 is not allowed
-      ~~~
-
-      We need to allow outgoing links:
 
       ~~~ yaml
+      apiVersion: skupper.io/v1alpha1
+      kind: SkupperClusterPolicy
+      metadata:
+        name: east
       spec:
-        namespaces:
-          - "east"
-        allowedOutgoingLinksHostnames:
-          - "*"
+        namespaces: [east]
+        allowedOutgoingLinksHostnames: ["*"]
+        allowedExposedResources: [deployment/backend]
+        allowedServices: [backend]
       ~~~
     commands:
       west:
-        - run: |
-            cat <<EOF | kubectl apply -f -
-            apiVersion: skupper.io/v1alpha1
-            kind: SkupperClusterPolicy
-            metadata:
-              name: west
-            spec:
-              namespaces:
-                - "west"
-              allowIncomingLinks: true
-            EOF
+        - run: kubectl apply -f west/policy.yaml
+        - await_resource: SkupperClusterPolicy/west
       east:
-        - run: |
-            cat <<EOF | kubectl apply -f -
-            apiVersion: skupper.io/v1alpha1
-            kind: SkupperClusterPolicy
-            metadata:
-              name: east
-            spec:
-              namespaces:
-                - "east"
-              allowedOutgoingLinksHostnames:
-                - "*"
-            EOF
+        - run: kubectl apply -f east/policy.yaml
+        - await_resource: SkupperClusterPolicy/east
   - standard: kubernetes/link_your_sites
-  - title: Policy stuff for service exposure
-    preamble: |
-      Without policy allowance:
-
-      ~~~ console
-      $ skupper expose deployment/backend --port 8080
-      Error: Policy validation error: deployment/backend cannot be exposed
-      ~~~
-
-      This is what we need:
-
-      ~~~ yaml
-      spec:
-        namespaces:
-          - "east"
-        allowedExposedResources:
-          - "deployment/backend"
-        allowedServices:
-          - "backend"
-      ~~~
-    commands:
-      east:
-        - run: |
-            cat <<EOF | kubectl apply -f -
-            apiVersion: skupper.io/v1alpha1
-            kind: SkupperClusterPolicy
-            metadata:
-              name: east
-            spec:
-              namespaces:
-                - "east"
-              allowedOutgoingLinksHostnames:
-                - "*"
-              allowedExposedResources:
-                - "deployment/backend"
-              allowedServices:
-                - "backend"
-            EOF
   - standard: hello_world/expose_the_backend
   - standard: hello_world/access_the_frontend
   - standard: hello_world/cleaning_up
-summary: |
-  This example locates the frontend and backend services in different
-  namespaces, on different clusters.  Ordinarily, this means that they
-  have no way to communicate unless they are exposed to the public
-  internet.
-
-  Introducing Skupper into each namespace allows us to create a virtual
-  application network that can connect services in different clusters.
-  Any service exposed on the application network is represented as a
-  local service in all of the linked namespaces.
-
-  The backend service is located in `east`, but the frontend service
-  in `west` can "see" it as if it were local.  When the frontend
-  sends a request to the backend, Skupper forwards the request to the
-  namespace where the backend is running and routes the response back to
-  the frontend.
-
-  <img src="images/sequence.svg" width="640"/>
