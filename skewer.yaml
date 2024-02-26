@@ -48,10 +48,10 @@ steps:
       exposure.
 
       _**Warning:**_ Once the CRD is installed, any existing Skupper
-      networks on the cluster will stop working because Skupper
-      cluster policy denies all operations not explicitly allowed in
-      the policy configuration.  Be careful to define working policy
-      rules before you enable policy for existing networks.
+      sites on the cluster will stop working because Skupper cluster
+      policy denies all operations not explicitly allowed in the
+      policy configuration.  Be careful to define working policy rules
+      before you enable policy for existing sites.
 
       Use `kubectl apply` to install the CRD in each cluster.
     commands:
@@ -67,6 +67,28 @@ steps:
             clusterrole.rbac.authorization.k8s.io/skupper-service-controller created
   - standard: hello_world/deploy_the_frontend_and_backend
   - standard: kubernetes/create_your_sites
+    commands:
+      west:
+        - run: skupper init
+          output: |
+            Waiting for LoadBalancer IP or hostname...
+            Waiting for status...
+            Skupper is now installed in namespace 'west'.  Use 'skupper status' to get more information.
+        - run: skupper status
+          output: |
+            Skupper is enabled for namespace west" (with policies). It is not connected to any other sites. It has no exposed services.
+      east:
+        - run: skupper init
+          output: |
+            Waiting for LoadBalancer IP or hostname...
+            Waiting for status...
+            Skupper is now installed in namespace 'east'.  Use 'skupper status' to get more information.
+        - run: skupper status
+          output: |
+            Skupper is enabled for namespace "east" (with policies). It is not connected to any other sites. It has no exposed services.
+    postamble: |
+      Note that the status output shows the sites enabled "with
+      policies".
   - title: Attempt to link your sites and expose the backend
     preamble: |
       Let's first try to link our sites and expose the backend service
@@ -91,14 +113,19 @@ steps:
       denied.
   - title: Grant permission to link your sites and expose the backend
     preamble: |
+      With policy enabled, we need to explicitly allow the site link
+      and service exposure required by the Hello World application.
+
       To enable linking from East to West, use `allowIncomingLinks:
-      true` in West and `allowOutoingLinksHostnames: ["*"]` in East.
-      You can also use a specific outgoing link hostname based on your
-      own deployment.
+      true` in West and `allowOutgoingLinksHostnames: ["*"]` in East.
+
+      This example uses an asterisk in the list of allowed outgoing
+      hostnames, which allows any hostname.  You can also specify a
+      narrow range of hostnames using regular expressions.
 
       To enable exposure of the backend, use `allowedServices:
-      [backend]` in West.  Then use `allowedServices: [backend]` and
-      `allowedExposedResources: [deployment/backend]` in East.
+      [backend]` in West.  Then, in East, use `allowedServices:
+      [backend]` and `allowedExposedResources: [deployment/backend]`.
 
       See [Skupper cluster policy][policy] for more information about
       policy configuration.

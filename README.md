@@ -148,10 +148,10 @@ nothing explicitly allowed) denies all site linking and service
 exposure.
 
 _**Warning:**_ Once the CRD is installed, any existing Skupper
-networks on the cluster will stop working because Skupper
-cluster policy denies all operations not explicitly allowed in
-the policy configuration.  Be careful to define working policy
-rules before you enable policy for existing networks.
+sites on the cluster will stop working because Skupper cluster
+policy denies all operations not explicitly allowed in the
+policy configuration.  Be careful to define working policy rules
+before you enable policy for existing sites.
 
 Use `kubectl apply` to install the CRD in each cluster.
 
@@ -236,7 +236,7 @@ Waiting for status...
 Skupper is now installed in namespace 'west'.  Use 'skupper status' to get more information.
 
 $ skupper status
-Skupper is enabled for namespace "west". It is not connected to any other sites. It has no exposed services.
+Skupper is enabled for namespace west" (with policies). It is not connected to any other sites. It has no exposed services.
 ~~~
 
 _**East:**_
@@ -255,11 +255,11 @@ Waiting for status...
 Skupper is now installed in namespace 'east'.  Use 'skupper status' to get more information.
 
 $ skupper status
-Skupper is enabled for namespace "east". It is not connected to any other sites. It has no exposed services.
+Skupper is enabled for namespace "east" (with policies). It is not connected to any other sites. It has no exposed services.
 ~~~
 
-As you move through the steps below, you can use `skupper status` at
-any time to check your progress.
+Note that the status output shows the sites enabled "with
+policies".
 
 ## Step 6: Attempt to link your sites and expose the backend
 
@@ -303,14 +303,19 @@ denied.
 
 ## Step 7: Grant permission to link your sites and expose the backend
 
+With policy enabled, we need to explicitly allow the site link
+and service exposure required by the Hello World application.
+
 To enable linking from East to West, use `allowIncomingLinks:
-true` in West and `allowOutoingLinksHostnames: ["*"]` in East.
-You can also use a specific outgoing link hostname based on your
-own deployment.
+true` in West and `allowOutgoingLinksHostnames: ["*"]` in East.
+
+This example uses an asterisk in the list of allowed outgoing
+hostnames, which allows any hostname.  You can also specify a
+narrow range of hostnames using regular expressions.
 
 To enable exposure of the backend, use `allowedServices:
-[backend]` in West.  Then use `allowedServices: [backend]` and
-`allowedExposedResources: [deployment/backend]` in East.
+[backend]` in West.  Then, in East, use `allowedServices:
+[backend]` and `allowedExposedResources: [deployment/backend]`.
 
 See [Skupper cluster policy][policy] for more information about
 policy configuration.
