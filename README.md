@@ -143,7 +143,9 @@ Definition (CRD) named `SkupperClusterPolicy`.  Installing the
 CRD requires cluster admin privileges.
 
 The presence of the CRD in a cluster tells Skupper to enforce
-cluster policy.
+cluster policy.  The default policy (an "empty" policy with
+nothing explicitly allowed) denies all site linking and service
+exposure.
 
 _**Warning:**_ Once the CRD is installed, any existing Skupper
 networks on the cluster will stop working because Skupper
@@ -301,6 +303,22 @@ denied.
 
 ## Step 7: Grant permission to link your sites and expose the backend
 
+To enable linking from East to West, use `allowIncomingLinks:
+true` in West and `allowOutoingLinksHostnames: ["*"]` in East.
+You can also use a specific outgoing link hostname based on your
+own deployment.
+
+To enable exposure of the backend, use `allowedServices:
+[backend]` in West.  Then use `allowedServices: [backend]` and
+`allowedExposedResources: [deployment/backend]` in East.
+
+See [Skupper cluster policy][policy] for more information about
+policy configuration.
+
+#### Policy in West
+
+[west/policy.yaml](west/policy.yaml):
+
 ~~~ yaml
 apiVersion: skupper.io/v1alpha1
 kind: SkupperClusterPolicy
@@ -311,6 +329,10 @@ spec:
   allowIncomingLinks: true
   allowedServices: [backend]
 ~~~
+
+#### Policy in East
+
+[east/policy.yaml](east/policy.yaml):
 
 ~~~ yaml
 apiVersion: skupper.io/v1alpha1
@@ -323,6 +345,9 @@ spec:
   allowedExposedResources: [deployment/backend]
   allowedServices: [backend]
 ~~~
+
+Use the `kubectl apply` command with the policy resources for
+each site.
 
 _**West:**_
 
